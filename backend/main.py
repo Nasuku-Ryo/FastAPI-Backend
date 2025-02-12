@@ -44,22 +44,26 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     new_user = create_user(db, user)
     return {"message": "User registered successfully", "user_id": new_user.id}
 
-@app.get("/get/users")
-async def get_current_user(api_key: str = Depends(api_key_header), db: Session = Depends(get_db)):
-    if not api_key or not api_key.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid or missing Authorization header")
+@app.get("/users/me")
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    현재 로그인한 사용자 정보를 반환하는 API.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authentication token")
 
-    token = api_key.split("Bearer ")[1]
     payload = decode_access_token(token)
-    if not payload:
+    if not payload or "sub" not in payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    user_email = payload.get("sub")
+    user_email = payload["sub"]
     user = db.query(User).filter(User.email == user_email).first()
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"id": user.id, "username": user.username, "email": user.email}
+
 
 @app.post("/auth/login", response_model=Token)
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
