@@ -24,16 +24,6 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-@app.post("/login", response_model=Token)
-def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """사용자 로그인"""
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
-
 @app.post("/signup")
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """회원가입 API"""
@@ -43,27 +33,6 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
     new_user = create_user(db, user)
     return {"message": "User registered successfully", "user_id": new_user.id}
-
-@app.get("/users/me")
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """
-    현재 로그인한 사용자 정보를 반환하는 API.
-    """
-    if not token:
-        raise HTTPException(status_code=401, detail="Missing authentication token")
-
-    payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_email = payload["sub"]
-    user = db.query(User).filter(User.email == user_email).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return {"id": user.id, "username": user.username, "email": user.email}
-
 
 @app.post("/auth/login", response_model=Token)
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
@@ -87,4 +56,25 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+@app.get("/users/me")
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    현재 로그인한 사용자 정보를 반환하는 API.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authentication token")
+
+    payload = decode_access_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user_email = payload["sub"]
+    user = db.query(User).filter(User.email == user_email).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"id": user.id, "username": user.username, "email": user.email}
+
     
