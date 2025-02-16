@@ -3,6 +3,12 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 from passlib.context import CryptContext
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError
+from sqlalchemy.orm import Session
+from database import get_db
+from models import User
 
 # .env 파일 로드
 load_dotenv()
@@ -26,3 +32,34 @@ def decode_access_token(token: str):
         return payload
     except JWTError:
         return None
+    
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """JWT 토큰에서 사용자 ID 추출 후, DB에서 사용자 정보 조회"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    payload = decode_access_token(token)
+    if payload is None:
+        raise credentials_exception
+
+    # user_id를 가져온 후 None 체크 및 변환
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise credentials_exception
+
+    try:
+        user_id = int(user_id)  # 문자열을 정수형으로 변환
+    except ValueError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise credentials_exception
+
+    return user
+
